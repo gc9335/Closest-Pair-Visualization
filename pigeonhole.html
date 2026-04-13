@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>鸽巢原理：为什么跨界合并是 O(N)</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+    .math { font-family: 'Times New Roman', Times, serif; font-style: italic; }
+    .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    .pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; }
+    .dash-line { animation: dash 1s linear forwards; stroke-dasharray: 10, 5; stroke-dashoffset: 100; }
+    .pulse-red { animation: pulseRed 1.5s infinite; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+    @keyframes dash { to { stroke-dashoffset: 0; } }
+    @keyframes pulseRed { 0% { stroke: #ef4444; stroke-width: 2; opacity: 1; } 50% { stroke: #f87171; stroke-width: 6; opacity: 0.8; } 100% { stroke: #ef4444; stroke-width: 2; opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // --- 图标组件 ---
+    const ArrowLeft = () => <svg className="w-4 h-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
+    const HomeIcon = () => <svg className="w-4 h-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+    const Play = () => <svg className="w-5 h-5 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
+    const Refresh = () => <svg className="w-5 h-5 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>;
+    const Info = () => <svg className="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
+
+    function App() {
+      const [step, setStep] = useState(0);
+      const maxStep = 5;
+
+      const handleNext = () => setStep(s => Math.min(maxStep, s + 1));
+      const handleReset = () => setStep(0);
+
+      // SVG 坐标系统常量
+      const d = 180; // 距离 d 的像素大小
+      const midX = 400; // 分割线 X 坐标
+      const pY = 250; // 点 P 的 Y 坐标
+
+      // 预定义的 6 个鸽子的坐标 (每个格子放一个)
+      const pigeons = [
+        { id: 1, x: 440, y: 110, delay: '0s' }, // 左上
+        { id: 2, x: 530, y: 160, delay: '0.2s' }, // 右上
+        { id: 3, x: 420, y: 220, delay: '0.4s' }, // 左中
+        { id: 4, x: 560, y: 280, delay: '0.6s' }, // 右中
+        { id: 5, x: 460, y: 350, delay: '0.8s' }, // 左下
+        { id: 6, x: 550, y: 410, delay: '1.0s' }, // 右下
+      ];
+      // 第 7 个鸽子 (产生碰撞)
+      const pigeon7 = { id: 7, x: 470, y: 150 }; 
+
+      // 阶段说明文案
+      const stepMessages = [
+        "阶段 0：假设我们正在检查左侧点 P。目标是寻找右侧蓝色区域 (长 2d, 宽 d) 内是否有与其距离小于 d 的点。",
+        "阶段 1：几何分割 —— 将右侧这个 d × 2d 的矩形，均匀地切分为 6 个小矩形。每个小矩形宽 d/2，高 2d/3。",
+        "阶段 2：数学推导 —— 计算单个小矩形的对角线长度。由勾股定理得出对角线为 (5/6)d。这说明：任何同一个小矩形内的两点，距离必定 < d！",
+        "阶段 3：鸽巢原理 (摆放点) —— 右侧点集的已知条件是：内部任意两点距离必须 ≥ d。为了不违反条件，我们最多只能在每个小格子放 1 个点，共 6 个。",
+        "阶段 4：产生矛盾 —— 如果该区域有第 7 个点！由抽屉原理，必有 2 点同在一个小格子，它们距离 < d，与已知条件矛盾！",
+        "结论：因此对于左侧任意点 P，其对应的 d × 2d 区域内最多只有 6 个点。循环最多执行 6 次，复杂度为严格的 O(N)！"
+      ];
+
+      return (
+        <div className="min-h-screen flex flex-col text-slate-800">
+          <header className="bg-emerald-900 text-white py-4 px-6 shadow-md flex justify-between items-center z-10">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">关键问题解答：鸽巢原理与线性时间 <span className="math">O(N)</span></h1>
+              <p className="text-emerald-200 text-sm mt-1">证明：为什么检查跨界点时，内层循环最多只需执行 6 次？</p>
+            </div>
+            
+            {/* 更新的统一导航栏 */}
+            <div className="flex gap-2 sm:gap-3 flex-wrap">
+              <a href="theory.html" className="flex items-center px-4 py-2 bg-emerald-800 hover:bg-emerald-700 rounded-lg transition-colors text-sm font-medium border border-emerald-600 shadow-sm text-emerald-100">
+                <ArrowLeft /> 上一页 (理论推导)
+              </a>
+              <a href="index.html" className="flex items-center px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm font-medium border border-slate-700 text-white shadow-sm">
+                <HomeIcon /> 返回主页
+              </a>
+            </div>
+          </header>
+
+          <main className="flex-grow p-6 flex flex-col xl:flex-row gap-6 max-w-7xl mx-auto w-full">
+            
+            {/* 左侧：SVG几何动画区 */}
+            <div className="flex-grow bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h2 className="font-bold text-slate-700 flex items-center">几何证明动态演示</h2>
+                <div className="flex gap-2">
+                  <button onClick={handleReset} className="px-3 py-1.5 text-sm flex items-center text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition">
+                    <Refresh /> 重置
+                  </button>
+                  <button onClick={handleNext} disabled={step === maxStep} className={`px-4 py-1.5 text-sm flex items-center font-medium rounded transition ${step === maxStep ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'}`}>
+                    {step === maxStep ? '演示结束' : <><Play /> 播放步骤 {step + 1}</>}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="relative flex-grow flex justify-center items-center bg-slate-100 p-4 overflow-hidden h-[500px]">
+                <svg width="800" height="500" className="bg-white rounded shadow-inner border border-slate-200" viewBox="0 0 800 500">
+                  
+                  {/* 1. 基础环境渲染 (Step 0+) */}
+                  <g className="fade-in">
+                    {/* 分割线 L */}
+                    <line x1={midX} y1="20" x2={midX} y2="480" stroke="#ef4444" strokeWidth="2" strokeDasharray="8,4" />
+                    <text x={midX} y="15" textAnchor="middle" fill="#ef4444" fontWeight="bold">分割线 L</text>
+                    
+                    {/* 左侧和右侧的区域标记 */}
+                    <text x={midX - 150} y="40" fill="#64748b" fontSize="18" fontWeight="bold">左侧点集 (S<tspan baselineShift="sub" fontSize="12">L</tspan>)</text>
+                    <text x={midX + 150} y="40" fill="#64748b" fontSize="18" fontWeight="bold">右侧点集 (S<tspan baselineShift="sub" fontSize="12">R</tspan>)</text>
+
+                    {/* 阴影条带 2d */}
+                    <rect x={midX - d} y="50" width={d * 2} height="430" fill="#fef08a" opacity="0.15" />
+                    
+                    {/* 点 P (左侧) */}
+                    <circle cx={midX - 80} cy={pY} r="6" fill="#0f172a" />
+                    <text x={midX - 95} y={pY + 5} fill="#0f172a" fontWeight="bold" fontSize="18">P</text>
+                    
+                    {/* d * 2d 的目标检查区域 (右侧) */}
+                    <rect x={midX} y={pY - d} width={d} height={d * 2} fill="#bfdbfe" opacity="0.3" stroke="#3b82f6" strokeWidth="2" />
+                    
+                    {/* 辅助线：标出上下界 2d */}
+                    <line x1={midX - d} y1={pY - d} x2={midX + d} y2={pY - d} stroke="#94a3b8" strokeDasharray="4,4" />
+                    <line x1={midX - d} y1={pY + d} x2={midX + d} y2={pY + d} stroke="#94a3b8" strokeDasharray="4,4" />
+                    <line x1={midX - d} y1={pY} x2={midX} y2={pY} stroke="#94a3b8" strokeDasharray="4,4" />
+                    
+                    <text x={midX + d + 10} y={pY - d + 5} fill="#64748b" fontSize="14">y = P.y - d</text>
+                    <text x={midX + d + 10} y={pY + d + 5} fill="#64748b" fontSize="14">y = P.y + d</text>
+                  </g>
+
+                  {/* 2. 六等分网格 (Step 1+) */}
+                  {step >= 1 && (
+                    <g className="fade-in">
+                      {/* 横向两条分割线 */}
+                      <line x1={midX} y1={pY - d + (2*d)/3} x2={midX + d} y2={pY - d + (2*d)/3} stroke="#2563eb" strokeWidth="1.5" />
+                      <line x1={midX} y1={pY - d + (4*d)/3} x2={midX + d} y2={pY - d + (4*d)/3} stroke="#2563eb" strokeWidth="1.5" />
+                      {/* 纵向一条分割线 */}
+                      <line x1={midX + d/2} y1={pY - d} x2={midX + d/2} y2={pY + d} stroke="#2563eb" strokeWidth="1.5" />
+                      
+                      {/* 标注尺寸 */}
+                      <text x={midX + d/4} y={pY - d - 10} fill="#2563eb" textAnchor="middle" className="math" fontSize="14">d/2</text>
+                      <text x={midX + 3*d/4} y={pY - d - 10} fill="#2563eb" textAnchor="middle" className="math" fontSize="14">d/2</text>
+                      <text x={midX - 25} y={pY - d + d/3} fill="#2563eb" textAnchor="middle" className="math" fontSize="14">2d/3</text>
+                    </g>
+                  )}
+
+                  {/* 3. 对角线与数学推导 (Step 2+) */}
+                  {step >= 2 && (
+                    <g className="fade-in">
+                      {/* 高亮左上角的小矩形 */}
+                      <rect x={midX} y={pY - d} width={d/2} height={(2*d)/3} fill="#fde047" opacity="0.5" />
+                      {/* 对角线 */}
+                      <line x1={midX} y1={pY - d} x2={midX + d/2} y2={pY - d + (2*d)/3} stroke="#d97706" strokeWidth="3" className="dash-line" />
+                      <text x={midX + 20} y={pY - d + 50} fill="#d97706" fontWeight="bold" className="pop-in math" style={{animationDelay: '1s'}} fontSize="16">5/6 d</text>
+                    </g>
+                  )}
+
+                  {/* 4. 放下 6 个鸽子 (Step 3+) */}
+                  {step >= 3 && (
+                    <g>
+                      {pigeons.map(p => (
+                        <circle 
+                          key={p.id} 
+                          cx={p.x} cy={p.y} r="7" 
+                          fill="#10b981" stroke="#064e3b" strokeWidth="2" 
+                          className="pop-in shadow-md" 
+                          style={{ animationDelay: step === 3 ? p.delay : '0s' }} 
+                        />
+                      ))}
+                    </g>
+                  )}
+
+                  {/* 5. 第 7 个鸽子产生冲突 (Step 4+) */}
+                  {step >= 4 && (
+                    <g className="fade-in">
+                      {/* 第 7 个点 (红色) */}
+                      <circle cx={pigeon7.x} cy={pigeon7.y} r="8" fill="#ef4444" stroke="#7f1d1d" strokeWidth="2" className="pop-in" />
+                      <text x={pigeon7.x + 15} y={pigeon7.y + 5} fill="#ef4444" fontWeight="bold">第7点</text>
+                      
+                      {/* 冲突连线闪烁 */}
+                      <line 
+                        x1={pigeons[0].x} y1={pigeons[0].y} 
+                        x2={pigeon7.x} y2={pigeon7.y} 
+                        className="pulse-red"
+                      />
+                      
+                      {/* 爆炸特效/警示圈 */}
+                      <circle cx={(pigeons[0].x + pigeon7.x)/2} cy={(pigeons[0].y + pigeon7.y)/2} r="30" fill="none" stroke="#ef4444" strokeWidth="3" opacity="0.5" strokeDasharray="5,5">
+                        <animate attributeName="r" values="10; 40" dur="1s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="1; 0" dur="1s" repeatCount="indefinite"/>
+                      </circle>
+                    </g>
+                  )}
+                </svg>
+              </div>
+
+              {/* 动画解说字幕 */}
+              <div className="bg-emerald-900 text-emerald-100 p-5 font-mono text-base border-t-4 border-emerald-500 min-h-[6rem] flex items-center">
+                <span className="text-yellow-400 mr-2 font-bold animate-pulse">▶</span> 
+                {stepMessages[step]}
+              </div>
+            </div>
+
+            {/* 右侧：理论推导区 */}
+            <div className="w-full xl:w-[450px] flex flex-col gap-5">
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2 flex items-center">
+                  <Info /> 抽屉原理推导过程
+                </h3>
+                
+                <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
+                  <div className={`p-4 rounded-lg border transition-all duration-300 ${step >= 0 ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
+                    <p className="font-bold mb-1">【前提条件】</p>
+                    <p>在合并阶段，我们已知右侧点集 <span className="math">S<sub>R</sub></span> 内部的任何两个点，它们之间的距离 <span className="math">≥ d</span>。</p>
+                  </div>
+
+                  <div className={`p-4 rounded-lg border transition-all duration-300 ${step >= 2 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
+                    <p className="font-bold mb-1">【格子对角线】</p>
+                    <p>将 <span className="math">d × 2d</span> 矩形切成 6 个 <span className="math">d/2 × 2d/3</span> 的小矩形。其对角线长度为：</p>
+                    <div className="text-center font-bold font-mono my-2 text-amber-700 bg-amber-100 py-1 rounded">
+                      √[ (d/2)² + (2d/3)² ] = (5/6)d &lt; d
+                    </div>
+                    <p>结论：同一个格子内的任意两点，距离必定严格小于 <span className="math">d</span>。</p>
+                  </div>
+
+                  <div className={`p-4 rounded-lg border transition-all duration-300 ${step >= 4 ? 'bg-red-50 border-red-200 text-red-900' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
+                    <p className="font-bold mb-1">【鸽巢原理 (Pigeonhole Principle)】</p>
+                    <p>既然同一个格子里的点距离会 <span className="math">&lt; d</span>，这违背了我们的【前提条件】。</p>
+                    <p className="mt-2 text-red-700 font-bold">因此，每个小格子最多只能容纳 1 个点。6个格子总共最多只能放 6 个点！</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-700 text-slate-300 transition-opacity duration-500 ${step >= 5 ? 'opacity-100 shadow-xl border-emerald-500' : 'opacity-40'}`}>
+                <h3 className="text-lg font-bold text-white mb-2 text-emerald-400">终极结论：严格 O(N)</h3>
+                <p className="text-sm mb-3">
+                  正是因为这种稀疏性：
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-2 text-emerald-100">
+                  <li>对于跨界带中的任何一个点，在按 Y 坐标排序后的数组中向后检查时，<b className="text-white">最多只需要检查接下来紧邻的 6 个点</b>。</li>
+                  <li>一旦超过 6 个点，由于鸽巢原理的限制，后续点的 Y 坐标差距必然已经大于 <span className="math">d</span>，无需再检查。</li>
+                </ul>
+                <div className="mt-4 pt-4 border-t border-slate-600 text-center">
+                  <span className="text-sm">内层循环次数为常数 <span className="math">C ≤ 6</span>，外层循环 <span className="math">N</span> 次。</span><br/>
+                  <span className="text-2xl font-bold text-emerald-400 math inline-block mt-2">合并复杂度：O(N)</span>
+                </div>
+              </div>
+
+            </div>
+
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

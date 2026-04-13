@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最近点对问题：分治法演示 (优化版)</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+    canvas { touch-action: none; display: block; }
+    /* 隐藏滚动条让右侧代码区更美观 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // --- 内置 SVG 图标组件 ---
+    const Play = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>;
+    const Pause = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>;
+    const SkipBack = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>;
+    const SkipForward = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>;
+    const RefreshCw = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>;
+    const Settings2 = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+    const Code = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>;
+    const ArrowRight = ({className}) => <svg className={className || "w-4 h-4 ml-1"} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
+    const HomeIcon = () => <svg className="w-4 h-4 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+    // ---------------------------------------------
+
+    // 算法伪代码定义
+    const pseudoCodeLines = [
+      { id: 'start', text: 'function closestPair(P):' },
+      { id: 'base', text: '  if |P| <= 3: return bruteForce(P)' },
+      { id: 'divide', text: '  midX = median(P).x' },
+      { id: 'min_lr', text: '  δ = min(d_L, d_R)' },
+      { id: 'strip', text: '  strip = { p in P | |p.x - midX| < δ }' },
+      { id: 'check', text: '  for p in strip: 检查Y相近的最多6个点' },
+      { id: 'update', text: '    δ = min(δ, cross_distance)' },
+      { id: 'return', text: '  return δ' }
+    ];
+
+    // 计算两点间欧氏距离
+    const getDistance = (p1, p2) => Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+
+    // 生成随机点集
+    const generatePoints = (n, width, height) => {
+      const pts = [];
+      const padding = 50; 
+      for (let i = 0; i < n; i++) {
+        pts.push({
+          id: i,
+          x: padding + Math.random() * (width - 2 * padding),
+          y: padding + Math.random() * (height - 2 * padding),
+        });
+      }
+      return pts;
+    };
+
+    // 预计算分治算法的所有动画帧
+    const computeFrames = (points, width, height) => {
+      const frames = [];
+
+      const pushFrame = (type, codeId, data, message) => {
+        frames.push({ type, codeId, ...data, message });
+      };
+
+      const dnc = (pX, pY, bounds) => {
+        if (pX.length <= 3) {
+          pushFrame('BASE_CASE', 'base', { bounds, activePoints: pX }, `【治-基础情形】到达底层，当前区域点数为 ${pX.length}，使用蛮力法计算。`);
+          let minD = Infinity;
+          let best = null;
+          for (let i = 0; i < pX.length; i++) {
+            for (let j = i + 1; j < pX.length; j++) {
+              let d = getDistance(pX[i], pX[j]);
+              pushFrame('CHECKING', 'base', { bounds, activePoints: pX, checkP1: pX[i], checkP2: pX[j], currentBest: best }, `【计算距离】点 ${pX[i].id} 和 点 ${pX[j].id} 距离为 ${d.toFixed(1)}`);
+              if (d < minD) {
+                minD = d;
+                best = { p1: pX[i], p2: pX[j], minD };
+                pushFrame('NEW_MIN', 'base', { bounds, activePoints: pX, currentBest: best }, `【更新最短】局部更短距离: ${minD.toFixed(1)}`);
+              }
+            }
+          }
+          pushFrame('RETURN', 'return', { bounds, currentBest: best }, `【局部返回】该区域计算完毕，最短距离为 ${minD.toFixed(1)}`);
+          return best;
+        }
+
+        let mid = Math.floor(pX.length / 2);
+        let midX = pX[mid].x;
+        pushFrame('DIVIDE', 'divide', { bounds, midX, activePoints: pX }, `【分-划分子集】中位数 X = ${midX.toFixed(1)}，开始左右分治。`);
+
+        let leftX = pX.slice(0, mid);
+        let rightX = pX.slice(mid);
+
+        let leftSet = new Set(leftX.map(p => p.id));
+        let leftY = [], rightY = [];
+        for (let p of pY) {
+          if (leftSet.has(p.id)) leftY.push(p);
+          else rightY.push(p);
+        }
+
+        let leftBest = dnc(leftX, leftY, { minX: bounds.minX, maxX: midX });
+        let rightBest = dnc(rightX, rightY, { minX: midX, maxX: bounds.maxX });
+
+        let best = (!rightBest || (leftBest && leftBest.minD < rightBest.minD)) ? leftBest : rightBest;
+        let d = best.minD;
+
+        pushFrame('COMBINE_START', 'min_lr', { bounds, midX, currentBest: best, stripRadius: d, activePoints: pX }, `【合-合并结果】对比左右侧结果，当前全局最短 δ = ${d.toFixed(1)}`);
+
+        let strip = pY.filter(p => Math.abs(p.x - midX) < d);
+        pushFrame('STRIP_CREATE', 'strip', { bounds, midX, stripRadius: d, stripPoints: strip, currentBest: best, activePoints: pX }, `【合-跨界扫描】生成宽度为 2δ 的跨界带，内有 ${strip.length} 个点。`);
+
+        for (let i = 0; i < strip.length; i++) {
+          for (let j = i + 1; j < strip.length && (strip[j].y - strip[i].y) < d; j++) {
+            let distVal = getDistance(strip[i], strip[j]);
+            pushFrame('STRIP_CHECK', 'check', { bounds, midX, stripRadius: d, stripPoints: strip, checkP1: strip[i], checkP2: strip[j], currentBest: best, activePoints: pX }, `【跨界检测】检查点对距离: ${distVal.toFixed(1)}`);
+            
+            if (distVal < d) {
+              d = distVal;
+              best = { p1: strip[i], p2: strip[j], minD: d };
+              pushFrame('STRIP_NEW_MIN', 'update', { bounds, midX, stripRadius: d, stripPoints: strip, currentBest: best, activePoints: pX }, `【跨界突破】🚨 发现更短跨界距离！更新 δ = ${d.toFixed(1)}`);
+            }
+          }
+        }
+        
+        pushFrame('RETURN', 'return', { bounds, currentBest: best, activePoints: pX }, `【合并完成】向上返回当前最短距离: ${best.minD.toFixed(1)}`);
+        return best;
+      };
+
+      let pX = [...points].sort((a, b) => a.x - b.x);
+      let pY = [...points].sort((a, b) => a.y - b.y);
+      
+      pushFrame('INIT', 'start', { bounds: {minX: 0, maxX: width}, activePoints: pX }, `【算法开始】对 ${points.length} 个点进行预排序。`);
+      
+      let finalBest = dnc(pX, pY, { minX: 0, maxX: width });
+      
+      pushFrame('DONE', 'start', { bounds: {minX: 0, maxX: width}, currentBest: finalBest, isFinal: true, activePoints: points }, `🎉【算法结束】执行完毕！全局最近点对距离为: ${finalBest.minD.toFixed(2)}`);
+      
+      return frames;
+    };
+
+    function App() {
+      const canvasRef = useRef(null);
+      const [numPoints, setNumPoints] = useState(25);
+      const [points, setPoints] = useState([]);
+      const [frames, setFrames] = useState([]);
+      const [currentFrameIdx, setCurrentFrameIdx] = useState(0);
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [speedMs, setSpeedMs] = useState(600);
+
+      // Refs用于在 requestAnimationFrame 循环中获取最新状态
+      const stateRef = useRef({ frames: [], currentFrameIdx: 0, points: [] });
+
+      const canvasWidth = 800;
+      const canvasHeight = 500;
+
+      const handleGenerate = useCallback(() => {
+        setIsPlaying(false);
+        const newPoints = generatePoints(numPoints, canvasWidth, canvasHeight);
+        const newFrames = computeFrames(newPoints, canvasWidth, canvasHeight);
+        setPoints(newPoints);
+        setFrames(newFrames);
+        setCurrentFrameIdx(0);
+        
+        stateRef.current = { frames: newFrames, currentFrameIdx: 0, points: newPoints };
+      }, [numPoints]);
+
+      useEffect(() => { handleGenerate(); }, [handleGenerate]);
+
+      // 同步最新状态到 ref，供动画循环使用
+      useEffect(() => {
+        stateRef.current = { frames, currentFrameIdx, points };
+      }, [frames, currentFrameIdx, points]);
+
+      // 离散的状态推进器 (控制算法执行节奏)
+      useEffect(() => {
+        let timer;
+        if (isPlaying && frames.length > 0 && currentFrameIdx < frames.length - 1) {
+          timer = setTimeout(() => { setCurrentFrameIdx(prev => prev + 1); }, speedMs);
+        } else if (currentFrameIdx >= frames.length - 1) {
+          setIsPlaying(false);
+        }
+        return () => clearTimeout(timer);
+      }, [isPlaying, currentFrameIdx, frames.length, speedMs]);
+
+      // 连续动画渲染循环 (负责让线条流动、焦点呼吸等，独立于算法步骤)
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animationId;
+
+        const renderLoop = (timestamp) => {
+          const { frames, currentFrameIdx, points } = stateRef.current;
+          if (frames.length === 0) {
+            animationId = requestAnimationFrame(renderLoop);
+            return;
+          }
+
+          const frame = frames[currentFrameIdx];
+          
+          // 1. 清除画布，填充底色 (纯白)
+          ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+          // 2. 绘制未选中区域的遮罩 (明暗分区强化)
+          if (frame.bounds) {
+            ctx.fillStyle = 'rgba(241, 245, 249, 0.85)'; // 偏冷的灰蓝色遮罩
+            
+            // 左侧遮罩
+            if (frame.bounds.minX > 0) {
+              ctx.fillRect(0, 0, frame.bounds.minX, canvasHeight);
+              // 左侧分割线
+              ctx.beginPath(); ctx.moveTo(frame.bounds.minX, 0); ctx.lineTo(frame.bounds.minX, canvasHeight);
+              ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
+            }
+            // 右侧遮罩
+            if (frame.bounds.maxX < canvasWidth) {
+              ctx.fillRect(frame.bounds.maxX, 0, canvasWidth - frame.bounds.maxX, canvasHeight);
+              // 右侧分割线
+              ctx.beginPath(); ctx.moveTo(frame.bounds.maxX, 0); ctx.lineTo(frame.bounds.maxX, canvasHeight);
+              ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
+            }
+          }
+
+          // 3. 绘制 Strip 跨界带区域 (高亮)
+          if (frame.midX !== undefined && frame.stripRadius !== undefined) {
+            const startX = Math.max(0, frame.midX - frame.stripRadius);
+            const width = Math.min(canvasWidth - startX, frame.stripRadius * 2);
+            
+            // 渐变带效果
+            const gradient = ctx.createLinearGradient(startX, 0, startX + width, 0);
+            gradient.addColorStop(0, 'rgba(253, 224, 71, 0.1)');
+            gradient.addColorStop(0.5, 'rgba(253, 224, 71, 0.4)');
+            gradient.addColorStop(1, 'rgba(253, 224, 71, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(startX, 0, width, canvasHeight);
+
+            // Strip 边缘虚线
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.lineDashOffset = timestamp / 40; // 动画流动效果
+            ctx.beginPath();
+            ctx.moveTo(startX, 0); ctx.lineTo(startX, canvasHeight);
+            ctx.moveTo(startX + width, 0); ctx.lineTo(startX + width, canvasHeight);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+
+          // 4. 绘制中位数红线 (流动的虚线)
+          if (frame.midX !== undefined) {
+            ctx.beginPath(); 
+            ctx.moveTo(frame.midX, 0); ctx.lineTo(frame.midX, canvasHeight);
+            ctx.strokeStyle = '#ef4444'; 
+            ctx.setLineDash([8, 6]); 
+            ctx.lineDashOffset = -(timestamp / 30); // 向下流动
+            ctx.lineWidth = 2; 
+            ctx.stroke(); 
+            ctx.setLineDash([]);
+          }
+
+          // 5. 绘制当前探测的距离连线 (蓝色呼吸虚线)
+          if (frame.checkP1 && frame.checkP2) {
+            ctx.beginPath(); 
+            ctx.moveTo(frame.checkP1.x, frame.checkP1.y); 
+            ctx.lineTo(frame.checkP2.x, frame.checkP2.y);
+            ctx.strokeStyle = '#3b82f6'; 
+            ctx.setLineDash([5, 5]); 
+            ctx.lineDashOffset = -(timestamp / 20); // 快速流动
+            ctx.lineWidth = 2; 
+            ctx.stroke(); 
+            ctx.setLineDash([]);
+          }
+
+          // 6. 绘制局部/全局最短距离连线 (绿色实线，结束时加粗带发光)
+          if (frame.currentBest) {
+            const { p1, p2 } = frame.currentBest;
+            ctx.save();
+            ctx.beginPath(); 
+            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = '#22c55e'; 
+            ctx.lineWidth = frame.isFinal ? 6 : 3;
+            
+            if (frame.isFinal) {
+              ctx.shadowColor = '#4ade80';
+              ctx.shadowBlur = 10;
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 7. 绘制所有散点 (根据所在区域动态调整样式)
+          points.forEach(p => {
+            let inBounds = false;
+            if (frame.bounds) {
+              inBounds = p.x >= frame.bounds.minX && p.x <= frame.bounds.maxX;
+            } else {
+              inBounds = true; // 无边界时默认都在界内
+            }
+            
+            let inStrip = false;
+            if (frame.stripPoints) {
+              inStrip = frame.stripPoints.some(sp => sp.id === p.id);
+            }
+
+            const isChecking = frame.checkP1 && frame.checkP2 && (p.id === frame.checkP1.id || p.id === frame.checkP2.id);
+            const isBest = frame.currentBest && (p.id === frame.currentBest.p1.id || p.id === frame.currentBest.p2.id);
+
+            // 呼吸动画半径
+            const breathScale = 1 + Math.sin(timestamp / 150) * 0.2; 
+
+            ctx.beginPath();
+            
+            // 根据状态设置点的大小和颜色
+            if (isBest) {
+              // 最短点对
+              const r = frame.isFinal ? 9 * breathScale : 7;
+              ctx.arc(p.x, p.y, Math.max(r, 0), 0, Math.PI * 2);
+              ctx.fillStyle = '#22c55e';
+              ctx.strokeStyle = '#14532d';
+              ctx.lineWidth = 2;
+            } else if (isChecking) {
+              // 正在探测的点
+              ctx.arc(p.x, p.y, 8 * breathScale, 0, Math.PI * 2);
+              ctx.fillStyle = '#3b82f6';
+              ctx.strokeStyle = '#1e3a8a';
+              ctx.lineWidth = 2;
+            } else if (inStrip) {
+              // Strip内的点
+              ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+              ctx.fillStyle = '#f59e0b';
+              ctx.strokeStyle = '#92400e';
+              ctx.lineWidth = 2;
+            } else if (inBounds) {
+              // 活跃区域内的普通点
+              ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+              ctx.fillStyle = '#334155';
+              ctx.strokeStyle = '#0f172a';
+              ctx.lineWidth = 1.5;
+            } else {
+              // 活跃区域外(暗区)的点 - 变小变淡
+              ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
+              ctx.strokeStyle = 'transparent';
+              ctx.lineWidth = 0;
+            }
+
+            ctx.fill();
+            if (ctx.lineWidth > 0) ctx.stroke();
+          });
+
+          animationId = requestAnimationFrame(renderLoop);
+        };
+
+        animationId = requestAnimationFrame(renderLoop);
+        return () => cancelAnimationFrame(animationId);
+      }, []);
+
+      const togglePlay = () => setIsPlaying(!isPlaying);
+      const stepNext = () => { setIsPlaying(false); setCurrentFrameIdx(Math.min(frames.length - 1, currentFrameIdx + 1)); };
+      const stepPrev = () => { setIsPlaying(false); setCurrentFrameIdx(Math.max(0, currentFrameIdx - 1)); };
+
+      const currentFrame = frames[currentFrameIdx] || {};
+      const activeCodeId = currentFrame.codeId || 'start';
+      const messageHistory = frames.slice(Math.max(0, currentFrameIdx - 6), currentFrameIdx + 1);
+      const progressPercent = frames.length > 0 ? (currentFrameIdx / (frames.length - 1)) * 100 : 0;
+
+      return (
+        <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex flex-col">
+          <header className="bg-slate-900 text-white py-4 px-6 shadow-md flex justify-between items-center z-10">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">最近点对问题：分治法动画演示</h1>
+              <p className="text-slate-400 text-sm mt-1">更清晰的分区对比与流畅的动画追踪</p>
+            </div>
+            
+            {/* --- 重点修复区域 --- */}
+            <div className="flex gap-3">
+              <a href="theory.html" className="flex items-center px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm font-medium border border-slate-700 text-blue-400 hover:text-blue-300 shadow-sm">
+                下一页：理论推导 <ArrowRight />
+              </a>
+              <a href="index.html" className="flex items-center px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm font-medium border border-slate-700 text-white shadow-sm">
+                <HomeIcon /> 返回主页
+              </a>
+            </div>
+            {/* -------------------- */}
+
+          </header>
+
+          <main className="flex-grow p-6 flex flex-col xl:flex-row gap-6 max-w-7xl mx-auto w-full">
+            <div className="flex-grow flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              {/* 画布区域 */}
+              <div className="bg-slate-200 flex justify-center items-center p-4 overflow-x-auto relative">
+                <canvas 
+                  ref={canvasRef} 
+                  width={canvasWidth} 
+                  height={canvasHeight} 
+                  className="rounded-lg shadow-md bg-white block" 
+                  style={{ minWidth: `${canvasWidth}px` }} 
+                />
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex-grow flex flex-col">
+                <div className="h-1.5 w-full bg-slate-200 rounded-full mb-4 overflow-hidden">
+                  <div className="h-full bg-blue-500 transition-all duration-300 ease-out" style={{ width: `${progressPercent}%` }}></div>
+                </div>
+                
+                <div className="flex flex-col lg:flex-row gap-4 h-full">
+                  {/* 控制台输出区 */}
+                  <div className="flex-1 bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-lg shadow-inner flex flex-col justify-end overflow-hidden h-64 lg:h-auto">
+                    {messageHistory.map((frame, idx) => {
+                      const isLatest = idx === messageHistory.length - 1;
+                      return (
+                        <div key={currentFrameIdx - messageHistory.length + 1 + idx} className={`whitespace-nowrap overflow-hidden text-ellipsis leading-loose transition-all duration-300 transform ${isLatest ? 'opacity-100 font-bold text-green-300 translate-x-1' : 'opacity-60 text-green-500'}`}>
+                          <span className="mr-2 text-slate-500">{`[步骤 ${currentFrameIdx - messageHistory.length + 2 + idx}]`}</span>
+                          <span className="mr-2 text-green-300">&gt;</span> 
+                          {frame.message}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 伪代码区 */}
+                  <div className="w-full lg:w-1/3 bg-slate-800 p-4 rounded-lg shadow-inner text-slate-300 font-mono text-sm overflow-y-auto no-scrollbar h-64 lg:h-auto">
+                    <h3 className="font-semibold mb-3 text-slate-100 flex items-center text-sm sticky top-0 bg-slate-800 pb-2 border-b border-slate-700">
+                      <Code className="w-4 h-4 mr-2 text-blue-400" /> 伪代码追踪
+                    </h3>
+                    <div className="space-y-1.5 mt-2">
+                      {pseudoCodeLines.map(line => (
+                        <div key={line.id} className={`px-3 py-2 rounded transition-all duration-300 text-xs sm:text-sm ${activeCodeId === line.id ? 'bg-blue-600 text-white font-bold shadow-md scale-[1.02] transform border-l-4 border-blue-300' : 'text-slate-400 hover:bg-slate-700 border-l-4 border-transparent'}`}>
+                          {line.text}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 侧边控制栏 */}
+            <div className="w-full xl:w-80 flex flex-col gap-4 flex-shrink-0">
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="font-semibold text-lg flex items-center mb-4 text-slate-700"><Settings2 className="w-5 h-5 mr-2 text-blue-500" />参数设置</h3>
+                <div className="mb-5">
+                  <label className="flex justify-between text-sm font-medium text-slate-600 mb-2">
+                    <span>随机点数量 N:</span>
+                    <span className="text-blue-600 font-bold">{numPoints}</span>
+                  </label>
+                  <input type="range" min="10" max="80" value={numPoints} onChange={(e) => setNumPoints(Number(e.target.value))} className="w-full accent-blue-600 cursor-pointer" />
+                </div>
+                <button onClick={handleGenerate} className="w-full flex justify-center items-center py-2.5 px-4 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-white rounded-lg transition-colors font-medium shadow-sm">
+                  <RefreshCw className="w-4 h-4 mr-2" /> 重新生成散点
+                </button>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="font-semibold text-lg mb-4 text-slate-700">动画控制</h3>
+                <div className="flex justify-center gap-2 mb-6">
+                  <button onClick={stepPrev} className="p-3 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 rounded-lg text-slate-700 transition-colors shadow-sm" title="上一步"><SkipBack className="w-5 h-5" /></button>
+                  <button onClick={togglePlay} className={`flex-grow flex justify-center items-center py-2 px-4 rounded-lg text-white font-medium transition-all shadow-md transform active:scale-95 ${isPlaying ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                    {isPlaying ? <><Pause className="w-5 h-5 mr-1"/> 暂停</> : <><Play className="w-5 h-5 mr-1"/> 自动播放</>}
+                  </button>
+                  <button onClick={stepNext} className="p-3 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 rounded-lg text-slate-700 transition-colors shadow-sm" title="下一步"><SkipForward className="w-5 h-5" /></button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">步进速度:</label>
+                  <div className="flex items-center text-xs text-slate-500 font-medium">
+                    <span>极速</span>
+                    <input type="range" min="50" max="1500" step="50" value={1550 - speedMs} onChange={(e) => setSpeedMs(1550 - Number(e.target.value))} className="w-full mx-2 accent-blue-600 cursor-pointer" />
+                    <span>慢速</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 算法提示卡片 */}
+              <div className="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100 text-sm text-blue-800">
+                <h4 className="font-bold mb-1 flex items-center"><svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 视觉引导</h4>
+                <ul className="list-disc pl-4 space-y-1 text-xs mt-2 text-blue-700">
+                  <li><span className="font-bold text-slate-800">亮白区域：</span>当前正在递归处理的子问题域。</li>
+                  <li><span className="font-bold text-slate-400">暗灰遮罩：</span>当前被挂起，暂不处理的区域。</li>
+                  <li><span className="font-bold text-yellow-600">黄底虚线：</span>跨界带 (Strip)，宽度为 <code className="bg-blue-100 px-1 rounded">2δ</code>。</li>
+                  <li><span className="font-bold text-green-600">绿色实线：</span>当前探测到的最短距离。</li>
+                </ul>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最近点对分治法 - 实验导航主页</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; background-color: #f8fafc; }
+    .hover-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    // --- 图标组件 ---
+    const PlayCircle = () => <svg className="w-8 h-8 mb-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>;
+    const BookOpen = () => <svg className="w-8 h-8 mb-4 text-indigo-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>;
+    const Lightbulb = () => <svg className="w-8 h-8 mb-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="9" y1="18" x2="15" y2="18"></line><line x1="10" y1="22" x2="14" y2="22"></line><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path></svg>;
+    const ArrowRight = () => <svg className="w-4 h-4 ml-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>;
+
+    function App() {
+      return (
+        <div className="min-h-screen bg-slate-100 flex flex-col">
+          {/* 页眉 */}
+          <header className="bg-slate-900 text-white py-12 px-6 shadow-md text-center">
+            <h1 className="text-4xl font-extrabold tracking-tight mb-3">最近点对问题：分治法实验演示</h1>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+              (Closest Pair of Points - Divide and Conquer) <br/>
+              包含散点计算动画、递归时间复杂度推导以及鸽巢原理的几何证明。
+            </p>
+          </header>
+
+          {/* 核心导航卡片区 */}
+          <main className="flex-grow p-8 flex items-center justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
+              
+              {/* 卡片 1：算法动态演示 */}
+              <a href="demo.html" className="hover-card bg-white p-8 rounded-2xl shadow-sm border border-slate-200 transition-all duration-300 flex flex-col items-start group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
+                <PlayCircle />
+                <h2 className="text-xl font-bold text-slate-800 mb-2">1. 算法动态演示</h2>
+                <p className="text-slate-500 text-sm mb-6 flex-grow">
+                  直观展示点集分割、递归到底层求解以及生成 2δ 带状区域进行跨界检查的完整代码追踪过程。
+                </p>
+                <span className="inline-flex items-center text-blue-600 font-semibold text-sm group-hover:text-blue-700">
+                  进入演示 <ArrowRight />
+                </span>
+              </a>
+
+              {/* 卡片 2：理论与复杂度推导 */}
+              <a href="theory.html" className="hover-card bg-white p-8 rounded-2xl shadow-sm border border-slate-200 transition-all duration-300 flex flex-col items-start group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
+                <BookOpen />
+                <h2 className="text-xl font-bold text-slate-800 mb-2">2. 理论与复杂度推导</h2>
+                <p className="text-slate-500 text-sm mb-6 flex-grow">
+                  利用生动的二叉递归树，配合主定理 (Master Theorem)，一步步推导演算得出 O(N log N) 的时间复杂度。
+                </p>
+                <span className="inline-flex items-center text-indigo-600 font-semibold text-sm group-hover:text-indigo-700">
+                  进入推导 <ArrowRight />
+                </span>
+              </a>
+
+              {/* 卡片 3：鸽巢原理证明 */}
+              <a href="pigeonhole.html" className="hover-card bg-white p-8 rounded-2xl shadow-sm border border-slate-200 transition-all duration-300 flex flex-col items-start group relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div>
+                <Lightbulb />
+                <h2 className="text-xl font-bold text-slate-800 mb-2">3. 鸽巢原理几何证明</h2>
+                <p className="text-slate-500 text-sm mb-6 flex-grow">
+                  专门解答核心疑难点：为什么内层扫描是线性的 O(N)？通过六等分矩形与勾股定理详细证明其稀疏性。
+                </p>
+                <span className="inline-flex items-center text-emerald-600 font-semibold text-sm group-hover:text-emerald-700">
+                  进入证明 <ArrowRight />
+                </span>
+              </a>
+
+            </div>
+          </main>
+          
+          <footer className="py-6 text-center text-slate-400 text-sm">
+            算法设计与分析实验课演示大作业
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
